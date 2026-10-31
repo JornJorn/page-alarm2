@@ -20,8 +20,6 @@ import android.os.SystemClock
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.util.Log
-import java.text.DateFormat
-import java.util.Date
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
@@ -40,7 +38,8 @@ class MonitorService : Service() {
 
         const val INTERVAL_MS = 5 * 60 * 1000L
 
-        private const val CHANNEL_MONITOR = "monitor"
+        private const val CHANNEL_MONITOR = "monitor_quiet"
+        private const val CHANNEL_MONITOR_OLD = "monitor"
         private const val CHANNEL_ALARM = "alarm"
         private const val ID_STATUS = 1
         private const val ID_ALARM = 2
@@ -137,8 +136,9 @@ class MonitorService : Service() {
             "Check failed: ${e.message ?: e.javaClass.simpleName}"
         }
 
+        // Only the in-app status line is updated. The notification stays untouched,
+        // so nothing appears on the phone unless the page changes.
         Store.setLastCheck(this, System.currentTimeMillis(), result)
-        nm.notify(ID_STATUS, buildStatusNotification())
     }
 
     private fun scheduleNext() {
@@ -192,9 +192,7 @@ class MonitorService : Service() {
         Store.clearPending(this)
         Store.setAlarm(this, false, "", false)
 
-        if (Store.monitoring(this)) {
-            nm.notify(ID_STATUS, buildStatusNotification())
-        } else {
+        if (!Store.monitoring(this)) {
             // Service was only running for a test alarm.
             stopForeground(STOP_FOREGROUND_REMOVE)
             stopSelf()
@@ -276,10 +274,14 @@ class MonitorService : Service() {
     // ------------------------------------------------------------- notifications
 
     private fun createChannels() {
+        nm.deleteNotificationChannel(CHANNEL_MONITOR_OLD)
         nm.createNotificationChannel(
             NotificationChannel(
-                CHANNEL_MONITOR, "Monitoring status", NotificationManager.IMPORTANCE_LOW
-            ).apply { description = "Shown while a page is being watched" }
+                CHANNEL_MONITOR, "Monitoring (silent)", NotificationManager.IMPORTANCE_MIN
+            ).apply {
+                description = "Required by Android while a page is watched. Never makes a sound."
+                setShowBadge(false)
+            }
         )
         nm.createNotificationChannel(
             NotificationChannel(
@@ -317,13 +319,7 @@ class MonitorService : Service() {
             PendingIntent.FLAG_IMMUTABLE
         )
 
-        val last = Store.lastCheck(this)
-        val line = if (last == 0L) {
-            "Starting..."
-        } else {
-            val t = DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(last))
-            "$t: ${Store.lastResult(this)}"
-        }
+        val line = "Armed. You will only be alerted if the page changes."
 
         return Notification.Builder(this, CHANNEL_MONITOR)
             .setSmallIcon(android.R.drawable.ic_menu_view)
