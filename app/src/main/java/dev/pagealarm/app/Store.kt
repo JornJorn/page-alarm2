@@ -1,6 +1,9 @@
 package dev.pagealarm.app
 
 import android.content.Context
+import org.json.JSONArray
+import org.json.JSONException
+import org.json.JSONObject
 
 /** Tiny SharedPreferences wrapper holding all app state. */
 object Store {
@@ -45,6 +48,39 @@ object Store {
     fun lastResult(c: Context): String = sp(c).getString("lastResult", "") ?: ""
     fun setLastCheck(c: Context, millis: Long, result: String) =
         sp(c).edit().putLong("lastCheck", millis).putString("lastResult", result).apply()
+
+    // --- Alarm history (newest first, capped) -------------------------------
+
+    class AlarmRecord(val time: Long, val url: String, val summary: String)
+
+    private const val MAX_HISTORY = 100
+
+    @Synchronized
+    fun history(c: Context): List<AlarmRecord> {
+        val raw = sp(c).getString("history", null) ?: return emptyList()
+        return try {
+            val arr = JSONArray(raw)
+            (0 until arr.length()).map {
+                val o = arr.getJSONObject(it)
+                AlarmRecord(o.getLong("t"), o.getString("u"), o.getString("s"))
+            }
+        } catch (e: JSONException) {
+            emptyList()
+        }
+    }
+
+    @Synchronized
+    fun addHistory(c: Context, rec: AlarmRecord) {
+        val all = listOf(rec) + history(c)
+        val arr = JSONArray()
+        all.take(MAX_HISTORY).forEach {
+            arr.put(JSONObject().put("t", it.time).put("u", it.url).put("s", it.summary))
+        }
+        sp(c).edit().putString("history", arr.toString()).apply()
+    }
+
+    @Synchronized
+    fun clearHistory(c: Context) = sp(c).edit().remove("history").apply()
 
     // --- Alarm state --------------------------------------------------------
 

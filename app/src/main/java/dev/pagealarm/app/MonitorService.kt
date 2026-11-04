@@ -175,6 +175,16 @@ class MonitorService : Service() {
     @Synchronized
     private fun raiseAlarm(summary: String, test: Boolean) {
         val alreadyActive = Store.alarmActive(this)
+        if (!test) {
+            // While an alarm is ringing, every 5-minute check sees the same difference.
+            // Only record it again if the text changed once more.
+            val last = Store.history(this).firstOrNull()
+            if (!alreadyActive || last?.summary != summary) {
+                Store.addHistory(
+                    this, Store.AlarmRecord(System.currentTimeMillis(), Store.url(this), summary)
+                )
+            }
+        }
         Store.setAlarm(this, true, summary, test)
         nm.notify(ID_ALARM, buildAlarmNotification(summary, test))
         if (!alreadyActive) startSiren()

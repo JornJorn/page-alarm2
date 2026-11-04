@@ -86,6 +86,13 @@ class MainActivity : Activity() {
             }
         })
 
+        root.addView(Button(this).apply {
+            text = "Alarm history"
+            setOnClickListener {
+                startActivity(Intent(this@MainActivity, HistoryActivity::class.java))
+            }
+        })
+
         setupHeader = TextView(this).apply {
             text = "\nFinish setup so the alarm can't be missed:"
             textSize = 15f
